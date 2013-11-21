@@ -33,16 +33,18 @@
 %%% Types
 %%%===================================================================
 
--record(result, {raw_timings    :: [micros()],
-                 minimum        :: micros(),
-                 maximum        :: micros(),
-                 mean           :: float() %% arithmetic mean
+-record(result, {raw_timings    :: [timing()],
+                 minimum        :: timing(),
+                 maximum        :: timing(),
+                 mean           :: timing() %% arithmetic mean
                 }).
 
 -type result()  :: #result{}.
 -type nullary() :: fun(() -> term()).
 -type micros()  :: integer().
--type timings() :: [micros()].
+-type millis()  :: float() | integer().
+-type timing()  :: micros() | millis().
+-type timings() :: [timing()].
 
 %%%===================================================================
 %%% Public API
@@ -80,10 +82,10 @@ tc_(Fun) ->
     {Time, _Res} = timer:tc(Fun),
     Time.
 
--spec mean(timings()) -> float().
+-spec mean(timings()) -> millis().
 mean(Timings) ->
     lists:sum(Timings) / length(Timings).
 
--spec micros_to_millis(micros()) -> float().
+-spec micros_to_millis(timing()) -> millis().
 micros_to_millis(Micros) ->
     Micros / 1000.

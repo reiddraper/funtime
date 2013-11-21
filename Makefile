@@ -30,7 +30,7 @@ $(PLT):
 	@dialyzer --output_plt $(PLT) --build_plt \
 	   --apps $(DEPS)
 
-dialyzer: $(PLT)
+dialyzer: $(PLT) compile
 	@dialyzer --fullpath --plt $(PLT) \
 		-Wunmatched_returns -Wno_return\
 		-r ./ebin
