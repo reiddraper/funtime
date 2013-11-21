@@ -1,0 +1,7 @@
+.eunit/*
+ebin/*
+doc/*
+current_counterexample.eqc
+.plt
+.qc
+.eqc-info
