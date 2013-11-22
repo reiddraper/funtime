@@ -33,10 +33,11 @@
 %%% Types
 %%%===================================================================
 
--record(result, {raw_timings    :: [timing()],
+-record(result, {raw_timings    :: timings(),
                  minimum        :: timing(),
                  maximum        :: timing(),
-                 mean           :: timing() %% arithmetic mean
+                 mean           :: timing(), %% arithmetic mean
+                 std_dev        :: timing()
                 }).
 
 -type result()  :: #result{}.
@@ -60,17 +61,20 @@ bench(Fun, NumTimes) ->
     #result{raw_timings = RawTimes,
             minimum     = lists:min(RawTimes),
             maximum     = lists:max(RawTimes),
-            mean        = mean(RawTimes)}.
+            mean        = funtime_stats:mean(RawTimes),
+            std_dev     = funtime_stats:std_dev(RawTimes)}.
 
 -spec result_millis(result()) -> result().
 result_millis(#result{raw_timings   = RawTimings,
                       minimum       = Minimum,
                       maximum       = Maximum,
-                      mean          = Mean}) ->
+                      mean          = Mean,
+                      std_dev       = StdDev}) ->
     #result{raw_timings = [micros_to_millis(X) || X <- RawTimings],
             minimum     = micros_to_millis(Minimum),
             maximum     = micros_to_millis(Maximum),
-            mean        = micros_to_millis(Mean)}.
+            mean        = micros_to_millis(Mean),
+            std_dev     = micros_to_millis(StdDev)}.
 
 %%%===================================================================
 %%% Helpers
@@ -81,10 +85,6 @@ result_millis(#result{raw_timings   = RawTimings,
 tc_(Fun) ->
     {Time, _Res} = timer:tc(Fun),
     Time.
-
--spec mean(timings()) -> millis().
-mean(Timings) ->
-    lists:sum(Timings) / length(Timings).
 
 -spec micros_to_millis(timing()) -> millis().
 micros_to_millis(Micros) ->
