@@ -26,21 +26,34 @@
 -endif.
 
 -export([bench/1,
-         bench/2,
-         result_millis/1]).
+         result_millis/1,
+         %%bench/3,
+         bench/2]).
+
+%% dialyzer
+-export([micros_to_millis/1]).
 
 %%%===================================================================
 %%% Types
 %%%===================================================================
 
--record(result, {raw_timings    :: timings(),
-                 minimum        :: timing(),
-                 maximum        :: timing(),
-                 mean           :: timing(), %% arithmetic mean
-                 std_dev        :: timing()
+-record(result, {
+          raw_timings    :: timings(),
+          minimum        :: timing(),
+          maximum        :: timing(),
+          mean           :: timing(), %% arithmetic mean
+          std_dev        :: timing()
                 }).
-
 -type result()  :: #result{}.
+
+%%-record(options, {
+%%          min_runs :: non_neg_integer(),
+%%          max_runs :: non_neg_integer(),
+%%          min_time :: millis(),
+%%          max_time :: millis()
+%%         }).
+%%-type options()  :: #options{}.
+
 -type nullary() :: fun(() -> term()).
 -type micros()  :: integer().
 -type millis()  :: float() | integer().
@@ -57,24 +70,9 @@ bench(Fun) ->
 
 -spec bench(nullary(), non_neg_integer()) -> result().
 bench(Fun, NumTimes) ->
-    RawTimes = [tc_(Fun) || _ <- lists:seq(1, NumTimes)],
-    #result{raw_timings = RawTimes,
-            minimum     = lists:min(RawTimes),
-            maximum     = lists:max(RawTimes),
-            mean        = funtime_stats:mean(RawTimes),
-            std_dev     = funtime_stats:std_dev(RawTimes)}.
+    RawTimes = run_for_at_least(timer:seconds(2), NumTimes, Fun),
+    result_from_timings(RawTimes).
 
--spec result_millis(result()) -> result().
-result_millis(#result{raw_timings   = RawTimings,
-                      minimum       = Minimum,
-                      maximum       = Maximum,
-                      mean          = Mean,
-                      std_dev       = StdDev}) ->
-    #result{raw_timings = [micros_to_millis(X) || X <- RawTimings],
-            minimum     = micros_to_millis(Minimum),
-            maximum     = micros_to_millis(Maximum),
-            mean        = micros_to_millis(Mean),
-            std_dev     = micros_to_millis(StdDev)}.
 
 %%%===================================================================
 %%% Helpers
@@ -86,6 +84,59 @@ tc_(Fun) ->
     {Time, _Res} = timer:tc(Fun),
     Time.
 
+-spec run_for_at_least(millis(), non_neg_integer(), nullary()) ->
+    timings().
+run_for_at_least(Milliseconds, Times, Function) ->
+    %% First run `Times' times, and only
+    %% then start checking if we've run
+    %% for enough time:
+    StartTime = os:timestamp(),
+    CountTimes = [tc_(Function) || _ <- lists:seq(1, Times)],
+    EndTime = os:timestamp(),
+    TimeDiff = timer:now_diff(EndTime, StartTime),
+    TimeDiffMilli = micros_to_millis(TimeDiff),
+    case TimeDiffMilli >= Milliseconds of
+        true ->
+            CountTimes;
+        false ->
+            CountTimes ++
+            run_until((Milliseconds - TimeDiffMilli) + TimeDiffMilli, Function)
+    end.
+
+run_until(Millis, Function) ->
+    run_until(Millis, Function, []).
+
+run_until(Millis, Function, Acc) ->
+    case micros_to_millis(os:timestamp()) > Millis of
+        true ->
+            Acc;
+        false ->
+            run_until(Millis, Function, [tc_(Function) | Acc])
+    end.
+
+
 -spec micros_to_millis(timing()) -> millis().
 micros_to_millis(Micros) ->
     Micros / 1000.
+
+result_from_timings(Timings) ->
+    #result{raw_timings = Timings,
+            minimum     = lists:min(Timings),
+            maximum     = lists:max(Timings),
+            mean        = funtime_stats:mean(Timings),
+            std_dev     = funtime_stats:std_dev(Timings)}.
+
+map_results(Fun, #result{raw_timings   = RawTimings,
+                         minimum       = Minimum,
+                         maximum       = Maximum,
+                         mean          = Mean,
+                         std_dev       = StdDev}) ->
+    #result{raw_timings = [Fun(X) || X <- RawTimings],
+            minimum     = Fun(Minimum),
+            maximum     = Fun(Maximum),
+            mean        = Fun(Mean),
+            std_dev     = Fun(StdDev)}.
+
+-spec result_millis(result()) -> result().
+result_millis(Results) ->
+    map_results(fun micros_to_millis/1, Results).
